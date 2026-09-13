@@ -316,7 +316,6 @@ async function connectVoiceBot(botConfig, isMainBot = false, customClient = null
       selfMute: false,
     });
 
-    // إضافة مستمع أخطاء للاتصال الصوتي لتفادي انهيار البوت (Socket Closed Error)
     connection.on("error", (error) => {
       console.error(`⚠️ خطأ في الاتصال الصوتي لـ [${botConfig.nickname}]:`, error.message);
     });
@@ -443,7 +442,7 @@ client.once("ready", async () => {
     client,
   );
 
-  // التذكير كل ساعتين
+  // 🌿 التذكير كل 5 ساعات (5 * 60 * 60 * 1000)
   setInterval(
     () => {
       const channel = client.channels.cache.get(CONFIG.REMINDER_CHANNEL_ID);
@@ -461,7 +460,7 @@ client.once("ready", async () => {
           .catch(() => null);
       }
     },
-    2 * 60 * 60 * 1000,
+    5 * 60 * 60 * 1000,
   );
 
   checkTempRoles();
@@ -1110,8 +1109,7 @@ client.on("interactionCreate", async (interaction) => {
       .setCustomId("apply_modal")
       .setTitle("استمارة التقديم للإدارة");
 
-    const rows = [];
-    for (const q of CONFIG.APPLY_QUESTIONS) {
+    const rows = CONFIG.APPLY_QUESTIONS.map((q) => {
       const input = new TextInputBuilder()
         .setCustomId(q.id)
         .setLabel(q.label)
@@ -1119,35 +1117,41 @@ client.on("interactionCreate", async (interaction) => {
         .setStyle(q.style)
         .setRequired(q.required);
 
-      rows.push(new ActionRowBuilder().addComponents(input));
-    }
+      return new ActionRowBuilder().addComponents(input);
+    });
 
     modal.addComponents(rows);
     await interaction.showModal(modal);
   }
 
   if (interaction.isModalSubmit() && interaction.customId === "apply_modal") {
-    await interaction.deferReply({ ephemeral: true });
+    const answers = CONFIG.APPLY_QUESTIONS.map((q) => ({
+      label: q.label,
+      value: interaction.fields.getTextInputValue(q.id),
+    }));
 
     const embed = new EmbedBuilder()
-      .setTitle("📩 تقديم إدارة جديد")
-      .setColor("Green")
-      .setThumbnail(interaction.user.displayAvatarURL())
-      .setTimestamp()
-      .addFields({ name: "المتقدم", value: `${interaction.user} (${interaction.user.id})` });
+      .setTitle("📩 طلب تقديم جديد للإدارة")
+      .setDescription(`المتقدم: ${interaction.user} (${interaction.user.tag})`)
+      .setColor("Blue")
+      .setTimestamp();
 
-    for (const q of CONFIG.APPLY_QUESTIONS) {
-      const value = interaction.fields.getTextInputValue(q.id);
-      embed.addFields({ name: q.label, value: value || "لا يوجد إجابة" });
-    }
+    answers.forEach((ans) => {
+      embed.addFields({ name: ans.label, value: ans.value || "لم يتم الإجابة" });
+    });
 
-    await interaction.channel.send({ embeds: [embed] });
-    await interaction.editReply({ content: "✅ تم إرسال تقديمك بنجاح، بالتوفيق!" });
+    await interaction.reply({
+      content: "✅ تم إرسال تقديمك بنجاح، بالتوفيق!",
+      ephemeral: true,
+    });
+
+    // إرسال التقديم إلى نفس الروم المعلن أو روم مخصص
+    await interaction.channel.send({ embeds: [embed] }).catch(() => null);
   }
 });
 
 // ============================================================
-// تسجيل الدخول
+// تسجيل دخول البوت الرئيسي
 // ============================================================
 
 client.login(CONFIG.TOKEN);
