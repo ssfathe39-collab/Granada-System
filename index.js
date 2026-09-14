@@ -335,12 +335,12 @@ function canModerateTarget(executor, target) {
 }
 
 // ============================================================
-// REGISTER ALL ENGLISH SLASH COMMANDS WITH ARABIC DESCRIPTIONS
+// CLEAR OLD COMMANDS & REGISTER NEW ENGLISH SLASH COMMANDS
 // ============================================================
 
 async function registerSlashCommands() {
   const commands = [
-    // 1. ban (حظر / باند)
+    // 1. ban
     new SlashCommandBuilder()
       .setName("ban")
       .setDescription("حظر عضو من السيرفر (مؤقت أو دائم)")
@@ -348,20 +348,20 @@ async function registerSlashCommands() {
       .addStringOption((opt) => opt.setName("duration").setDescription("المدة مثل (7d, 1h) أو دائم").setRequired(false))
       .addStringOption((opt) => opt.setName("reason").setDescription("سبب الحظر").setRequired(false)),
 
-    // 2. unban (ارجع / فك_حظر)
+    // 2. unban
     new SlashCommandBuilder()
       .setName("unban")
       .setDescription("فك الحظر عن عضو بواسطة ID")
       .addStringOption((opt) => opt.setName("id").setDescription("معرف العضو (ID)").setRequired(true)),
 
-    // 3. kick (طرد)
+    // 3. kick
     new SlashCommandBuilder()
       .setName("kick")
       .setDescription("طرد عضو من السيرفر")
       .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
       .addStringOption((opt) => opt.setName("reason").setDescription("سبب الطرد").setRequired(false)),
 
-    // 4. timeout (اسكات / تايم)
+    // 4. timeout
     new SlashCommandBuilder()
       .setName("timeout")
       .setDescription("إعطاء تايم أوت (إسكات) لعضو")
@@ -369,63 +369,63 @@ async function registerSlashCommands() {
       .addStringOption((opt) => opt.setName("duration").setDescription("المدة (مثال: 10m, 1h, 1d)").setRequired(true))
       .addStringOption((opt) => opt.setName("reason").setDescription("السبب").setRequired(false)),
 
-    // 5. untimeout (تكلم / تحدث)
+    // 5. untimeout
     new SlashCommandBuilder()
       .setName("untimeout")
       .setDescription("فك التايم أوت (الإسكات) عن عضو")
       .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true)),
 
-    // 6. serverinfo (سيرفر)
+    // 6. serverinfo
     new SlashCommandBuilder()
       .setName("serverinfo")
       .setDescription("معلومات السيرفر الإجمالية"),
 
-    // 7. role (رول)
+    // 7. role
     new SlashCommandBuilder()
       .setName("role")
       .setDescription("إعطاء رتبة معينة لعضو")
       .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
       .addRoleOption((opt) => opt.setName("role").setDescription("اختر الرتبة").setRequired(true)),
 
-    // 8. removerole (سحب_رول / ازالة_رول)
+    // 8. removerole
     new SlashCommandBuilder()
       .setName("removerole")
       .setDescription("سحب/إزالة رتبة من عضو")
       .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
       .addRoleOption((opt) => opt.setName("role").setDescription("اختر الرتبة المراد سحبها").setRequired(true)),
 
-    // 9. lock (قفل / ق)
+    // 9. lock
     new SlashCommandBuilder()
       .setName("lock")
       .setDescription("قفل الكتابة في روم معين")
       .addChannelOption((opt) => opt.setName("channel").setDescription("اختر الروم (اختياري)").setRequired(false)),
 
-    // 10. unlock (فتح / ف)
+    // 10. unlock
     new SlashCommandBuilder()
       .setName("unlock")
       .setDescription("فتح الكتابة في روم معين")
       .addChannelOption((opt) => opt.setName("channel").setDescription("اختر الروم (اختياري)").setRequired(false)),
 
-    // 11. warn (تحذير / انذار)
+    // 11. warn
     new SlashCommandBuilder()
       .setName("warn")
       .setDescription("إعطاء تحذير/إنذار لعضو")
       .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
       .addStringOption((opt) => opt.setName("reason").setDescription("سبب التحذير").setRequired(true)),
 
-    // 12. unwarn (اعفاء)
+    // 12. unwarn
     new SlashCommandBuilder()
       .setName("unwarn")
       .setDescription("إعفاء عضو وإزالة تحذير بواسطة الكود")
       .addStringOption((opt) => opt.setName("code").setDescription("كود التحذير").setRequired(true)),
 
-    // 13. warnings (تحذيرات)
+    // 13. warnings
     new SlashCommandBuilder()
       .setName("warnings")
       .setDescription("عرض قائمة التحذيرات لعضو معين أو لجميع الأعضاء")
       .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو (اختياري)").setRequired(false)),
 
-    // 14. temprole (رول-مؤقت / رول_مؤقت)
+    // 14. temprole
     new SlashCommandBuilder()
       .setName("temprole")
       .setDescription("إعطاء رتبة مؤقتة لعضو لمدة محددة")
@@ -433,19 +433,19 @@ async function registerSlashCommands() {
       .addRoleOption((opt) => opt.setName("role").setDescription("اختر الرتبة").setRequired(true))
       .addStringOption((opt) => opt.setName("duration").setDescription("المدة (مثال: 1d, 2h)").setRequired(true)),
 
-    // 15. nickname (لقب / اسم)
+    // 15. nickname
     new SlashCommandBuilder()
       .setName("nickname")
       .setDescription("تغيير لقب/اسم عضو في السيرفر")
       .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
       .addStringOption((opt) => opt.setName("nick").setDescription("اللقب الجديد").setRequired(true)),
 
-    // 16. leaderboard (تفاعل / توب)
+    // 16. leaderboard
     new SlashCommandBuilder()
       .setName("leaderboard")
       .setDescription("عرض قائمة الأعضاء الأكثر تفاعلاً في السيرفر"),
 
-    // 17. apply (تقديم)
+    // 17. apply
     new SlashCommandBuilder()
       .setName("apply")
       .setDescription("إدارة نظام التقديم للإدارة (فتح/إغلاق/إرسال/قبول/رفض)")
@@ -465,14 +465,14 @@ async function registerSlashCommands() {
       .addUserOption((opt) => opt.setName("user").setDescription("العضو المتقدم (مطلوب عند القبول/الرفض)").setRequired(false))
       .addStringOption((opt) => opt.setName("details").setDescription("الرتبة الممنوحة أو سبب الرفض").setRequired(false)),
 
-    // 18. giveaway (قيفاواي / سحب)
+    // 18. giveaway
     new SlashCommandBuilder()
       .setName("giveaway")
       .setDescription("إنشاء سحب جديد (Giveaway)")
       .addStringOption((opt) => opt.setName("duration").setDescription("مدّة السحب (مثال: 1h, 1d)").setRequired(true))
       .addStringOption((opt) => opt.setName("prize").setDescription("الجائزة").setRequired(true)),
 
-    // 19. clear (مسح)
+    // 19. clear
     new SlashCommandBuilder()
       .setName("clear")
       .setDescription("مسح عدد معين من الرسائل في الروم")
@@ -490,13 +490,25 @@ async function registerSlashCommands() {
   const rest = new REST({ version: "10" }).setToken(CONFIG.TOKEN);
 
   try {
-    console.log("⏳ جاري تسجيل أوامر السلاش بالإنجليزية مع الوصف العربي...");
-    await rest.put(Routes.applicationCommands(client.user.id), {
-      body: commands,
-    });
-    console.log("✅ تم تسجيل جميع أوامر السلاش العشرين بنجاح!");
+    console.log("🧹 جاري تنظيف الأوامر القديمة من ديسكورد...");
+
+    // 1. مسح جميع الأوامر العامة المسجلة سابساً
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+
+    // 2. مسح أوامر السيرفرات إن وجدت (Guild Commands)
+    for (const guild of client.guilds.cache.values()) {
+      await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [] }).catch(() => null);
+    }
+
+    console.log("✅ تم تنظيف جميع الأوامر القديمة بنجاح.");
+    console.log("⏳ جاري تسجيل القائمة الجديدة من الأوامر...");
+
+    // 3. تسجيل الأوامر الجديدة
+    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+    
+    console.log("🎉 تم تسجيل أوامر السلاش الجديدة بنجاح!");
   } catch (error) {
-    console.error("❌ خطأ أثناء تسجيل أوامر السلاش:", error.message);
+    console.error("❌ خطأ أثناء مسح/تسجيل أوامر السلاش:", error.message);
   }
 }
 
