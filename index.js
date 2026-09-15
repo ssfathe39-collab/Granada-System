@@ -41,7 +41,7 @@ const fs = require("fs");
 
 // ============================================================
 // Discord Client
-// ============================================================
+// ============================================================ 
 
 const client = new Client({
   intents: [
@@ -61,7 +61,7 @@ const client = new Client({
 const CONFIG = {
   TOKEN: process.env.TOKEN || process.env.Granada_token,
   GRANADA_VOICE_CHANNEL_ID: "1442200304853582005",
-  REMINDER_CHANNEL_ID: "1496200586906042590",
+  REMINDER_CHANNEL_ID: "1442605140405256383",
   WELCOME_CHANNEL_ID: "1442200304522104929",
   WELCOME_IMAGE_URL:
     "https://cdn.discordapp.com/attachments/1442200304522104929/1534267076380721355/welcome.png",
