@@ -60,7 +60,7 @@ const CONFIG = {
   WELCOME_IMAGE_URL:
     "https://cdn.discordapp.com/attachments/1442200304522104929/1534267076380721355/welcome.png",
 
-  JAIL_ROLE_ID: "1508130937819500635", // ID رول المسجون
+  JAIL_ROLE_ID: "1513691033815220334", // ID رول المسجون
 
   ROLES: {
     BAN: [
