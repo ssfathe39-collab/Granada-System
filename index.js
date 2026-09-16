@@ -41,7 +41,7 @@ const fs = require("fs");
 
 // ============================================================
 // Discord Client
-// ============================================================ 
+// ============================================================
 
 const client = new Client({
   intents: [
@@ -59,12 +59,15 @@ const client = new Client({
 // ============================================================
 
 const CONFIG = {
+  PREFIX: "!", // البادئة للأوامر الكتابية
   TOKEN: process.env.TOKEN || process.env.Granada_token,
   GRANADA_VOICE_CHANNEL_ID: "1442200304853582005",
   REMINDER_CHANNEL_ID: "1442605140405256383",
   WELCOME_CHANNEL_ID: "1442200304522104929",
   WELCOME_IMAGE_URL:
     "https://cdn.discordapp.com/attachments/1442200304522104929/1534267076380721355/welcome.png",
+
+  JAIL_ROLE_ID: "1508130937819500635", // رتبة السجن (يرجى التأكد من الـ ID أو تعديله)
 
   ROLES: {
     BAN: [
@@ -138,34 +141,21 @@ const CONFIG = {
       "1497964133797199921",
       "1497985358955024514",
     ],
-    APPLY: [
-      "1508130937819500635",
-      "1497983638200123552",
-      "1497964133797199921",
+    JAIL: [
       "1497985358955024514",
-      "1496230091812901026",
-      "1502735885500682291",
-    ],
-    GIVEAWAY: [
-      "1496228340657557544",
-      "1496228628764299494",
+      "1497983638200123552",
+      "1508130937819500635",
       "1508130522377752677",
-      "1508130937819500635",
-      "1497983638200123552",
-      "1497964133797199921",
-      "1497984406726512740",
-      "1497985358955024514",
-      "1496230091812901026",
+      "1496228628764299494",
+      "1497980636831420597",
+      "1496228439840002099",
+      "1500537635125329920",
+      "1497981205184774144",
+      "1497984837766610974",
+      "1500537380115841154",
+      "1496228699815542805",
     ],
   },
-
-  APPLY_QUESTIONS: [
-    { id: "q1", label: "الاسم الشخصي", placeholder: "ماهو اسمك...", style: TextInputStyle.Short, required: true },
-    { id: "q2", label: "العمر", placeholder: "كم عمرك...", style: TextInputStyle.Short, required: true },
-    { id: "q3", label: "الدولة", placeholder: "ماهي دولتك...", style: TextInputStyle.Short, required: true },
-    { id: "q4", label: "خبراتك الادارية", placeholder: "اذكر خبرتك...", style: TextInputStyle.Paragraph, required: true },
-    { id: "q5", label: "كيف تفيد سيرفر غرناطة", placeholder: "كيف ستفيدنا في غرناطة...", style: TextInputStyle.Paragraph, required: true },
-  ],
 
   VOICE_BOTS: [
     { token: process.env.VOICE_BOT_1_TOKEN, channelId: "1442200304853582006", nickname: "قرطبة" },
@@ -187,9 +177,8 @@ if (!CONFIG.TOKEN) {
 let warnings = loadData("./warnings.json", {});
 let tempRoles = loadData("./tempRoles.json", []);
 let tempBans = loadData("./tempBans.json", []);
-
-let applyStatus = false;
-let userMsgCount = {};
+let jailedUsers = loadData("./jailedUsers.json", {});
+let userMsgCount = loadData("./userMsgCount.json", {});
 let linkViolations = {};
 
 function loadData(path, fallback = {}) {
@@ -316,7 +305,7 @@ function checkTempBans() {
 }
 
 // ============================================================
-// Permissions
+// Permissions & Utility
 // ============================================================
 
 function hasPermission(member, allowedRoles) {
@@ -335,180 +324,66 @@ function canModerateTarget(executor, target) {
 }
 
 // ============================================================
-// CLEAR OLD COMMANDS & REGISTER NEW ENGLISH SLASH COMMANDS
+// REGISTER SLASH COMMANDS
 // ============================================================
 
 async function registerSlashCommands() {
   const commands = [
-    // 1. ban
-    new SlashCommandBuilder()
-      .setName("ban")
-      .setDescription("حظر عضو من السيرفر (مؤقت أو دائم)")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
-      .addStringOption((opt) => opt.setName("duration").setDescription("المدة مثل (7d, 1h) أو دائم").setRequired(false))
-      .addStringOption((opt) => opt.setName("reason").setDescription("سبب الحظر").setRequired(false)),
-
-    // 2. unban
-    new SlashCommandBuilder()
-      .setName("unban")
-      .setDescription("فك الحظر عن عضو بواسطة ID")
+    new SlashCommandBuilder().setName("ban").setDescription("حظر عضو من السيرفر")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addStringOption((opt) => opt.setName("duration").setDescription("المدة (7d, 1h)"))
+      .addStringOption((opt) => opt.setName("reason").setDescription("السبب")),
+    new SlashCommandBuilder().setName("unban").setDescription("فك الحظر")
       .addStringOption((opt) => opt.setName("id").setDescription("معرف العضو (ID)").setRequired(true)),
-
-    // 3. kick
-    new SlashCommandBuilder()
-      .setName("kick")
-      .setDescription("طرد عضو من السيرفر")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
-      .addStringOption((opt) => opt.setName("reason").setDescription("سبب الطرد").setRequired(false)),
-
-    // 4. timeout
-    new SlashCommandBuilder()
-      .setName("timeout")
-      .setDescription("إعطاء تايم أوت (إسكات) لعضو")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
-      .addStringOption((opt) => opt.setName("duration").setDescription("المدة (مثال: 10m, 1h, 1d)").setRequired(true))
-      .addStringOption((opt) => opt.setName("reason").setDescription("السبب").setRequired(false)),
-
-    // 5. untimeout
-    new SlashCommandBuilder()
-      .setName("untimeout")
-      .setDescription("فك التايم أوت (الإسكات) عن عضو")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true)),
-
-    // 6. serverinfo
-    new SlashCommandBuilder()
-      .setName("serverinfo")
-      .setDescription("معلومات السيرفر الإجمالية"),
-
-    // 7. role
-    new SlashCommandBuilder()
-      .setName("role")
-      .setDescription("إعطاء رتبة معينة لعضو")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
-      .addRoleOption((opt) => opt.setName("role").setDescription("اختر الرتبة").setRequired(true)),
-
-    // 8. removerole
-    new SlashCommandBuilder()
-      .setName("removerole")
-      .setDescription("سحب/إزالة رتبة من عضو")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
-      .addRoleOption((opt) => opt.setName("role").setDescription("اختر الرتبة المراد سحبها").setRequired(true)),
-
-    // 9. lock
-    new SlashCommandBuilder()
-      .setName("lock")
-      .setDescription("قفل الكتابة في روم معين")
-      .addChannelOption((opt) => opt.setName("channel").setDescription("اختر الروم (اختياري)").setRequired(false)),
-
-    // 10. unlock
-    new SlashCommandBuilder()
-      .setName("unlock")
-      .setDescription("فتح الكتابة في روم معين")
-      .addChannelOption((opt) => opt.setName("channel").setDescription("اختر الروم (اختياري)").setRequired(false)),
-
-    // 11. warn
-    new SlashCommandBuilder()
-      .setName("warn")
-      .setDescription("إعطاء تحذير/إنذار لعضو")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
-      .addStringOption((opt) => opt.setName("reason").setDescription("سبب التحذير").setRequired(true)),
-
-    // 12. unwarn
-    new SlashCommandBuilder()
-      .setName("unwarn")
-      .setDescription("إعفاء عضو وإزالة تحذير بواسطة الكود")
-      .addStringOption((opt) => opt.setName("code").setDescription("كود التحذير").setRequired(true)),
-
-    // 13. warnings
-    new SlashCommandBuilder()
-      .setName("warnings")
-      .setDescription("عرض قائمة التحذيرات لعضو معين أو لجميع الأعضاء")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو (اختياري)").setRequired(false)),
-
-    // 14. temprole
-    new SlashCommandBuilder()
-      .setName("temprole")
-      .setDescription("إعطاء رتبة مؤقتة لعضو لمدة محددة")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
-      .addRoleOption((opt) => opt.setName("role").setDescription("اختر الرتبة").setRequired(true))
-      .addStringOption((opt) => opt.setName("duration").setDescription("المدة (مثال: 1d, 2h)").setRequired(true)),
-
-    // 15. nickname
-    new SlashCommandBuilder()
-      .setName("nickname")
-      .setDescription("تغيير لقب/اسم عضو في السيرفر")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو").setRequired(true))
-      .addStringOption((opt) => opt.setName("nick").setDescription("اللقب الجديد").setRequired(true)),
-
-    // 16. leaderboard
-    new SlashCommandBuilder()
-      .setName("leaderboard")
-      .setDescription("عرض قائمة الأعضاء الأكثر تفاعلاً في السيرفر"),
-
-    // 17. apply
-    new SlashCommandBuilder()
-      .setName("apply")
-      .setDescription("إدارة نظام التقديم للإدارة (فتح/إغلاق/إرسال/قبول/رفض)")
-      .addStringOption((opt) =>
-        opt
-          .setName("action")
-          .setDescription("الخيارات")
-          .setRequired(true)
-          .addChoices(
-            { name: "فتح (Open)", value: "open" },
-            { name: "إغلاق (Close)", value: "close" },
-            { name: "إرسال زر التقديم (Send)", value: "send" },
-            { name: "قبول متقدم (Accept)", value: "accept" },
-            { name: "رفض متقدم (Reject)", value: "reject" }
-          )
-      )
-      .addUserOption((opt) => opt.setName("user").setDescription("العضو المتقدم (مطلوب عند القبول/الرفض)").setRequired(false))
-      .addStringOption((opt) => opt.setName("details").setDescription("الرتبة الممنوحة أو سبب الرفض").setRequired(false)),
-
-    // 18. giveaway
-    new SlashCommandBuilder()
-      .setName("giveaway")
-      .setDescription("إنشاء سحب جديد (Giveaway)")
-      .addStringOption((opt) => opt.setName("duration").setDescription("مدّة السحب (مثال: 1h, 1d)").setRequired(true))
-      .addStringOption((opt) => opt.setName("prize").setDescription("الجائزة").setRequired(true)),
-
-    // 19. clear
-    new SlashCommandBuilder()
-      .setName("clear")
-      .setDescription("مسح عدد معين من الرسائل في الروم")
-      .addIntegerOption((opt) =>
-        opt.setName("amount").setDescription("عدد الرسائل (1 - 100)").setRequired(true).setMinValue(1).setMaxValue(100)
-      ),
-
-    // 20. userinfo
-    new SlashCommandBuilder()
-      .setName("userinfo")
-      .setDescription("عرض معلومات عضو في السيرفر")
-      .addUserOption((opt) => opt.setName("user").setDescription("اختر العضو (اختياري)").setRequired(false)),
+    new SlashCommandBuilder().setName("kick").setDescription("طرد عضو")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addStringOption((opt) => opt.setName("reason").setDescription("السبب")),
+    new SlashCommandBuilder().setName("timeout").setDescription("إعطاء تايم أوت")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addStringOption((opt) => opt.setName("duration").setDescription("المدة").setRequired(true))
+      .addStringOption((opt) => opt.setName("reason").setDescription("السبب")),
+    new SlashCommandBuilder().setName("untimeout").setDescription("فك التايم أوت")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true)),
+    new SlashCommandBuilder().setName("serverinfo").setDescription("معلومات السيرفر"),
+    new SlashCommandBuilder().setName("role").setDescription("إعطاء رتبة")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addRoleOption((opt) => opt.setName("role").setDescription("الرتبة").setRequired(true)),
+    new SlashCommandBuilder().setName("removerole").setDescription("سحب رتبة")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addRoleOption((opt) => opt.setName("role").setDescription("الرتبة").setRequired(true)),
+    new SlashCommandBuilder().setName("lock").setDescription("قفل الروم")
+      .addChannelOption((opt) => opt.setName("channel").setDescription("الروم")),
+    new SlashCommandBuilder().setName("unlock").setDescription("فتح الروم")
+      .addChannelOption((opt) => opt.setName("channel").setDescription("الروم")),
+    new SlashCommandBuilder().setName("warn").setDescription("إعطاء تحذير")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addStringOption((opt) => opt.setName("reason").setDescription("السبب").setRequired(true)),
+    new SlashCommandBuilder().setName("unwarn").setDescription("إزالة تحذير")
+      .addStringOption((opt) => opt.setName("code").setDescription("كود التحذير أو ID العضو").setRequired(true)),
+    new SlashCommandBuilder().setName("warnings").setDescription("عرض التحذيرات")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو")),
+    new SlashCommandBuilder().setName("temprole").setDescription("رول مؤقت")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addRoleOption((opt) => opt.setName("role").setDescription("الرتبة").setRequired(true))
+      .addStringOption((opt) => opt.setName("duration").setDescription("المدة").setRequired(true)),
+    new SlashCommandBuilder().setName("nickname").setDescription("تغيير اسم مستعار")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addStringOption((opt) => opt.setName("nick").setDescription("الاسم الجديد").setRequired(true)),
+    new SlashCommandBuilder().setName("leaderboard").setDescription("أفضل 10 متفاعلين في السيرفر"),
+    new SlashCommandBuilder().setName("jail").setDescription("سجن عضو")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true))
+      .addStringOption((opt) => opt.setName("reason").setDescription("السبب")),
+    new SlashCommandBuilder().setName("unjail").setDescription("فك سجن عضو")
+      .addUserOption((opt) => opt.setName("user").setDescription("العضو").setRequired(true)),
   ];
 
   const rest = new REST({ version: "10" }).setToken(CONFIG.TOKEN);
 
   try {
-    console.log("🧹 جاري تنظيف الأوامر القديمة من ديسكورد...");
-
-    // 1. مسح جميع الأوامر العامة المسجلة سابساً
-    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
-
-    // 2. مسح أوامر السيرفرات إن وجدت (Guild Commands)
-    for (const guild of client.guilds.cache.values()) {
-      await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: [] }).catch(() => null);
-    }
-
-    console.log("✅ تم تنظيف جميع الأوامر القديمة بنجاح.");
-    console.log("⏳ جاري تسجيل القائمة الجديدة من الأوامر...");
-
-    // 3. تسجيل الأوامر الجديدة
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    
-    console.log("🎉 تم تسجيل أوامر السلاش الجديدة بنجاح!");
+    console.log("🎉 تم تسجيل أوامر السلاش بنجاح!");
   } catch (error) {
-    console.error("❌ خطأ أثناء مسح/تسجيل أوامر السلاش:", error.message);
+    console.error("❌ خطأ أثناء تسجيل أوامر السلاش:", error.message);
   }
 }
 
@@ -519,7 +394,6 @@ async function registerSlashCommands() {
 client.once("ready", async () => {
   console.log("\n======================================");
   console.log(`✅ البوت الرئيسي جاهز: ${client.user.tag}`);
-  console.log(`🆔 ID: ${client.user.id}`);
   console.log("======================================\n");
 
   await registerSlashCommands();
@@ -540,7 +414,7 @@ client.once("ready", async () => {
 });
 
 // ============================================================
-// 🌿 نظام الترحيب
+// نظام الترحيب
 // ============================================================
 
 client.on("guildMemberAdd", async (member) => {
@@ -556,17 +430,18 @@ client.on("guildMemberAdd", async (member) => {
 });
 
 // ============================================================
-// MESSAGE CREATE (الرسائل التلقائية والأوامر الكتابية)
+// MESSAGE CREATE (الأوامر الكتابية والرسائل التلقائية)
 // ============================================================
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot || !message.guild) return;
 
+  // احتساب تفاعل العضو
   userMsgCount[message.author.id] = (userMsgCount[message.author.id] || 0) + 1;
+  saveData("./userMsgCount.json", userMsgCount);
 
   // منع روابط Discord
   const discordLinkRegex = /(discord\.gg|discord\.com\/invite)\/[a-zA-Z0-9]+/gi;
-
   if (discordLinkRegex.test(message.content)) {
     await message.delete().catch(() => null);
     const userId = message.author.id;
@@ -587,483 +462,338 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  // رد والسلام
-  const greetings = [
-    "السلام عليكم",
-    "السلام عليكم ورحمة الله وبركاته",
-    "سلام عليكم",
-    "سلام عليكم ورحمة الله وبركاته",
-  ];
-
+  // الرد على السلام
+  const greetings = ["السلام عليكم", "السلام عليكم ورحمة الله وبركاته", "سلام عليكم", "سلام عليكم ورحمة الله وبركاته"];
   if (greetings.includes(message.content.trim())) {
     return message.reply("وعليكم السلام ورحمة الله وبركاته");
+  }
+
+  // معالجة الأوامر الكتابية
+  if (!message.content.startsWith(CONFIG.PREFIX)) return;
+
+  const args = message.content.slice(CONFIG.PREFIX.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  // 1. أمر باند
+  if (command === "ban") {
+    if (!hasPermission(message.member, CONFIG.ROLES.BAN)) return message.reply("❌ ليس لديك صلاحية لاستخدام هذا الأمر.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    if (!target) return message.reply("❌ يرجى منشن العضو أو كتابة المعرف الخاص به بشكل صحيح.");
+    if (!canModerateTarget(message.member, target)) return message.reply("❌ لا يمكنك حظر هذا العضو.");
+
+    const durationArg = args[1];
+    const reason = args.slice(2).join(" ") || "بدون سبب";
+    let durationMs = durationArg ? ms(durationArg) : null;
+
+    await message.guild.members.ban(target.id, { reason: `${reason} | بواسطة: ${message.author.tag}` });
+    if (durationMs) {
+      tempBans.push({ userId: target.id, guildId: message.guild.id, expireAt: Date.now() + durationMs });
+      saveData("./tempBans.json", tempBans);
+    }
+    return message.reply(`✅ تم حظر ${target.user.tag} ${durationMs ? `لمدة ${durationArg}` : "بشكل دائم"} | السبب: ${reason}`);
+  }
+
+  // 2. أمر فك الباند
+  if (command === "unban") {
+    if (!hasPermission(message.member, CONFIG.ROLES.UNBAN)) return message.reply("❌ ليس لديك صلاحية لاستخدام هذا الأمر.");
+    const userId = args[0];
+    if (!userId) return message.reply("❌ يرجى كتابة معرف العضو المحظور (ID).");
+
+    await message.guild.bans.remove(userId).catch(() => null);
+    return message.reply(`✅ تم فك الحظر عن العضو (${userId}).`);
+  }
+
+  // 3. أمر طرد
+  if (command === "kick") {
+    if (!hasPermission(message.member, CONFIG.ROLES.KICK)) return message.reply("❌ ليس لديك صلاحية لاستخدام هذا الأمر.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    if (!target) return message.reply("❌ يرجى تحديد العضو بشكل صحيح.");
+    if (!canModerateTarget(message.member, target)) return message.reply("❌ لا يمكنك طرد هذا العضو.");
+
+    const reason = args.slice(1).join(" ") || "بدون سبب";
+    await target.kick(reason);
+    return message.reply(`✅ تم طرد العضو ${target.user.tag} | السبب: ${reason}`);
+  }
+
+  // 4. أمر تايم أوت
+  if (command === "timeout") {
+    if (!hasPermission(message.member, CONFIG.ROLES.TIMEOUT)) return message.reply("❌ ليس لديك صلاحية لاستخدام هذا الأمر.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    if (!target) return message.reply("❌ يرجى تحديد العضو بشكل صحيح.");
+    if (!canModerateTarget(message.member, target)) return message.reply("❌ لا يمكنك إسكات هذا العضو.");
+
+    const durationMs = ms(args[1]);
+    if (!durationMs) return message.reply("❌ صيغة الوقت غير صحيحة (مثال: 10m, 1h).");
+
+    const reason = args.slice(2).join(" ") || "بدون سبب";
+    await target.timeout(durationMs, reason);
+    return message.reply(`✅ تم إعطاء تايم أوت لـ ${target.user.tag} لمدة ${args[1]}.`);
+  }
+
+  // 5. أمر فك تايم أوت
+  if (command === "untimeout") {
+    if (!hasPermission(message.member, CONFIG.ROLES.TIMEOUT)) return message.reply("❌ ليس لديك صلاحية لاستخدام هذا الأمر.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    if (!target) return message.reply("❌ يرجى تحديد العضو.");
+
+    await target.timeout(null);
+    return message.reply(`✅ تم فك التايم أوت عن ${target.user.tag}.`);
+  }
+
+  // 6. أمر معلومات عن السيرفر
+  if (command === "serverinfo") {
+    const embed = new EmbedBuilder()
+      .setTitle(`معلومات سيرفر ${message.guild.name}`)
+      .addFields(
+        { name: "عدد الأعضاء", value: `${message.guild.memberCount}`, inline: true },
+        { name: "تاريخ الإنشاء", value: `<t:${Math.floor(message.guild.createdTimestamp / 1000)}:R>`, inline: true }
+      )
+      .setColor("Blue");
+    return message.reply({ embeds: [embed] });
+  }
+
+  // 7. أمر اعطاء رول
+  if (command === "role") {
+    if (!hasPermission(message.member, CONFIG.ROLES.ROLES_MANAGEMENT)) return message.reply("❌ ليس لديك صلاحية.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    const role = message.mentions.roles.first() || message.guild.roles.cache.get(args[1]);
+    if (!target || !role) return message.reply("❌ يرجى كتابة الأمر بالشكل التالي: `!role @user @role`");
+
+    await target.roles.add(role);
+    return message.reply(`✅ تم إعطاء الرول **${role.name}** لـ ${target.user.tag}`);
+  }
+
+  // 8. أمر ازالة رول
+  if (command === "removerole") {
+    if (!hasPermission(message.member, CONFIG.ROLES.ROLES_MANAGEMENT)) return message.reply("❌ ليس لديك صلاحية.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    const role = message.mentions.roles.first() || message.guild.roles.cache.get(args[1]);
+    if (!target || !role) return message.reply("❌ يرجى كتابة الأمر بالشكل التالي: `!removerole @user @role`");
+
+    await target.roles.remove(role);
+    return message.reply(`✅ تم إزالة الرول **${role.name}** من ${target.user.tag}`);
+  }
+
+  // 9. أمر فتح روم
+  if (command === "unlock" || command === "فتح") {
+    if (!hasPermission(message.member, CONFIG.ROLES.CHANNEL_MANAGEMENT)) return message.reply("❌ ليس لديك صلاحية.");
+    const channel = message.mentions.channels.first() || message.channel;
+    await channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: true });
+    return message.reply(`🔓 تم فتح الروم ${channel}`);
+  }
+
+  // 10. أمر اغلاق روم
+  if (command === "lock" || command === "قفل") {
+    if (!hasPermission(message.member, CONFIG.ROLES.CHANNEL_MANAGEMENT)) return message.reply("❌ ليس لديك صلاحية.");
+    const channel = message.mentions.channels.first() || message.channel;
+    await channel.permissionOverwrites.edit(message.guild.roles.everyone, { SendMessages: false });
+    return message.reply(`🔒 تم إغلاق الروم ${channel}`);
+  }
+
+  // 11. أمر تحذير
+  if (command === "warn") {
+    if (!hasPermission(message.member, CONFIG.ROLES.WARNS)) return message.reply("❌ ليس لديك صلاحية.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    const reason = args.slice(1).join(" ");
+    if (!target || !reason) return message.reply("❌ يرجى المنشن/المعرف وكتابة سبب التحذير.");
+
+    const warnCode = generateCode();
+    if (!warnings[target.id]) warnings[target.id] = [];
+    warnings[target.id].push({ code: warnCode, reason, date: new Date().toLocaleDateString() });
+    saveData("./warnings.json", warnings);
+
+    return message.reply(`⚠️ تم تحذير ${target.user.tag} | الكود: \`${warnCode}\` | السبب: ${reason}`);
+  }
+
+  // 12. أمر ازالة تحذير
+  if (command === "unwarn") {
+    if (!hasPermission(message.member, CONFIG.ROLES.WARNS)) return message.reply("❌ ليس لديك صلاحية.");
+    const query = args[0];
+    if (!query) return message.reply("❌ يرجى كتابة كود التحذير أو منشن/معرف العضو.");
+
+    const targetUser = message.mentions.users.first() || await client.users.fetch(query).catch(() => null);
+
+    if (targetUser && warnings[targetUser.id]) {
+      delete warnings[targetUser.id];
+      saveData("./warnings.json", warnings);
+      return message.reply(`✅ تم إزالة كافة تحذيرات العضو ${targetUser.tag}`);
+    } else {
+      for (const userId in warnings) {
+        const idx = warnings[userId].findIndex((w) => w.code === query);
+        if (idx !== -1) {
+          warnings[userId].splice(idx, 1);
+          saveData("./warnings.json", warnings);
+          return message.reply(`✅ تم إزالة التحذير بالكود \`${query}\`.`);
+        }
+      }
+    }
+    return message.reply("❌ لم يتم العثور على تحذيرات بهذا الكود أو العضو.");
+  }
+
+  // 13. الحصول على قائمة التحذيرات
+  if (command === "warnings") {
+    const target = message.mentions.users.first() || (args[0] ? await client.users.fetch(args[0]).catch(() => null) : null);
+    const embed = new EmbedBuilder().setTitle("📋 قائمة التحذيرات").setColor("Orange");
+
+    if (target) {
+      const list = warnings[target.id] || [];
+      if (!list.length) return message.reply("✅ لا يوجد تحذيرات لهذا العضو.");
+      embed.setDescription(list.map((w) => `• الكود: \`${w.code}\` | السبب: ${w.reason} | التاريخ: ${w.date}`).join("\n"));
+    } else {
+      let total = "";
+      for (const uid in warnings) {
+        if (warnings[uid].length > 0) {
+          total += `<@${uid}>: ${warnings[uid].length} تحذير(ات)\n`;
+        }
+      }
+      embed.setDescription(total || "لا يوجد تحذيرات في السيرفر.");
+    }
+    return message.reply({ embeds: [embed] });
+  }
+
+  // 14. أمر رول مؤقت
+  if (command === "temprole") {
+    if (!hasPermission(message.member, CONFIG.ROLES.ROLES_MANAGEMENT)) return message.reply("❌ ليس لديك صلاحية.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    const role = message.mentions.roles.first() || message.guild.roles.cache.get(args[1]);
+    const durationMs = ms(args[2]);
+
+    if (!target || !role || !durationMs) return message.reply("❌ الاستخدام الصحيح: `!temprole @user @role 1d`");
+
+    await target.roles.add(role);
+    tempRoles.push({ userId: target.id, guildId: message.guild.id, roleId: role.id, expireAt: Date.now() + durationMs });
+    saveData("./tempRoles.json", tempRoles);
+
+    return message.reply(`✅ تم إعطاء ${target.user.tag} الرول **${role.name}** لمدة ${args[2]}`);
+  }
+
+  // 15. أمر اسم مستعار
+  if (command === "nickname" || command === "nick") {
+    if (!hasPermission(message.member, CONFIG.ROLES.NICKNAME)) return message.reply("❌ ليس لديك صلاحية.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    const newNick = args.slice(1).join(" ");
+
+    if (!target || !newNick) return message.reply("❌ الاستخدام: `!nickname @user الاسم_الجديد`");
+    await target.setNickname(newNick);
+    return message.reply(`✅ تم تغيير اسم ${target.user.tag} المستعار إلى **${newNick}**`);
+  }
+
+  // 16. لوحة الصدارة - أفضل 10 متفاعلين
+  if (command === "leaderboard" || command === "تفاعل") {
+    const sorted = Object.entries(userMsgCount)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10);
+
+    if (!sorted.length) return message.reply("لا توجد بيانات تفاعل بعد.");
+
+    const embed = new EmbedBuilder()
+      .setTitle("🏆 قائمة أفضل 10 متفاعلين في السيرفر")
+      .setColor("Gold");
+
+    let desc = "";
+    sorted.forEach(([id, count], idx) => {
+      desc += `**#${idx + 1}** | <@${id}> — **${count}** رسالة\n`;
+    });
+    embed.setDescription(desc);
+
+    return message.reply({ embeds: [embed] });
+  }
+
+  // 17. أمر السجن (Jail)
+  if (command === "jail") {
+    if (!hasPermission(message.member, CONFIG.ROLES.JAIL)) return message.reply("❌ ليس لديك صلاحية.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    if (!target) return message.reply("❌ يرجى منشن العضو أو إضافة ID الخاص به.");
+
+    const reason = args.slice(1).join(" ") || "بدون سبب";
+    const userRoles = target.roles.cache.filter((r) => r.id !== message.guild.id).map((r) => r.id);
+
+    jailedUsers[target.id] = userRoles;
+    saveData("./jailedUsers.json", jailedUsers);
+
+    await target.roles.set([CONFIG.JAIL_ROLE_ID]).catch(() => null);
+    return message.reply(`🔒 تم سجن العضو ${target.user.tag} | السبب: ${reason}`);
+  }
+
+  // 18. أمر فك السجن (Unjail)
+  if (command === "unjail") {
+    if (!hasPermission(message.member, CONFIG.ROLES.JAIL)) return message.reply("❌ ليس لديك صلاحية.");
+    const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
+    if (!target) return message.reply("❌ يرجى منشن العضو أو إضافة ID الخاص به.");
+
+    const oldRoles = jailedUsers[target.id] || [];
+    await target.roles.set(oldRoles).catch(() => null);
+    delete jailedUsers[target.id];
+    saveData("./jailedUsers.json", jailedUsers);
+
+    return message.reply(`🔓 تم فك سجن العضو ${target.user.tag} وإعادة رتبة الأصليّة.`);
   }
 });
 
 // ============================================================
-// INTERACTION CREATE (Slash Commands Handler)
+// INTERACTION CREATE (معالجة Slash Commands)
 // ============================================================
 
 client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;
 
-    // 1. /ban
     if (commandName === "ban") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.BAN)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
+      if (!hasPermission(interaction.member, CONFIG.ROLES.BAN)) return interaction.reply({ content: "❌ لا تملك صلاحية.", ephemeral: true });
       const targetUser = interaction.options.getUser("user");
       const durationArg = interaction.options.getString("duration");
       const reason = interaction.options.getString("reason") || "بدون سبب";
       const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
 
-      if (targetMember && !canModerateTarget(interaction.member, targetMember)) {
-        return interaction.reply({ content: "❌ لا يمكنك حظر هذا العضو بسبب رتبته العالية.", ephemeral: true });
-      }
+      if (targetMember && !canModerateTarget(interaction.member, targetMember)) return interaction.reply({ content: "❌ لا يمكنك حظره.", ephemeral: true });
+      let durationMs = durationArg ? ms(durationArg) : null;
 
-      let durationMs = durationArg && durationArg !== "دائم" ? ms(durationArg) : null;
-
-      await interaction.guild.members.ban(targetUser.id, { reason: `${reason} | بواسطة: ${interaction.user.tag}` });
-
+      await interaction.guild.members.ban(targetUser.id, { reason });
       if (durationMs) {
         tempBans.push({ userId: targetUser.id, guildId: interaction.guild.id, expireAt: Date.now() + durationMs });
         saveData("./tempBans.json", tempBans);
       }
-
-      return interaction.reply({ content: `✅ تم حظر ${targetUser.tag} ${durationMs ? `لمدة ${durationArg}` : "بشكل دائم"} | السبب: ${reason}` });
+      return interaction.reply({ content: `✅ تم حظر ${targetUser.tag} | السبب: ${reason}` });
     }
 
-    // 2. /unban
-    if (commandName === "unban") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.UNBAN)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const userId = interaction.options.getString("id");
-      await interaction.guild.bans.remove(userId).catch(() => null);
-      return interaction.reply({ content: `✅ تم فك الحظر عن العضو (${userId}).` });
-    }
-
-    // 3. /kick
-    if (commandName === "kick") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.KICK)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const targetUser = interaction.options.getUser("user");
-      const reason = interaction.options.getString("reason") || "بدون سبب";
-      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود بالسيرفر.", ephemeral: true });
-      if (!canModerateTarget(interaction.member, targetMember)) return interaction.reply({ content: "❌ لا يمكنك طرد هذا العضو.", ephemeral: true });
-
-      await targetMember.kick(reason);
-      return interaction.reply({ content: `✅ تم طرد العضو ${targetUser.tag} | السبب: ${reason}` });
-    }
-
-    // 4. /timeout
-    if (commandName === "timeout") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.TIMEOUT)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const targetUser = interaction.options.getUser("user");
-      const durationStr = interaction.options.getString("duration");
-      const reason = interaction.options.getString("reason") || "بدون سبب";
-      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود بالسيرفر.", ephemeral: true });
-      if (!canModerateTarget(interaction.member, targetMember)) return interaction.reply({ content: "❌ لا يمكنك إسكات هذا العضو.", ephemeral: true });
-
-      const durationMs = ms(durationStr);
-      if (!durationMs) return interaction.reply({ content: "❌ الصيغة الزمانية غير صحيحة (مثال: 10m, 1h).", ephemeral: true });
-
-      await targetMember.timeout(durationMs, reason);
-      return interaction.reply({ content: `✅ تم إعطاء تايم أوت لـ ${targetUser.tag} لمدة ${durationStr}.` });
-    }
-
-    // 5. /untimeout
-    if (commandName === "untimeout") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.TIMEOUT)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const targetUser = interaction.options.getUser("user");
-      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود بالسيرفر.", ephemeral: true });
-
-      await targetMember.timeout(null);
-      return interaction.reply({ content: `✅ تم فك التايم أوت عن ${targetUser.tag}.` });
-    }
-
-    // 6. /serverinfo
-    if (commandName === "serverinfo") {
-      const embed = new EmbedBuilder()
-        .setTitle(`معلومات سيرفر ${interaction.guild.name}`)
-        .addFields(
-          { name: "عدد الأعضاء", value: `${interaction.guild.memberCount}`, inline: true },
-          { name: "تاريخ الإنشاء", value: `<t:${Math.floor(interaction.guild.createdTimestamp / 1000)}:R>`, inline: true }
-        )
-        .setColor("Blue");
-
-      return interaction.reply({ embeds: [embed] });
-    }
-
-    // 7. /role
-    if (commandName === "role") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.ROLES_MANAGEMENT)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const targetUser = interaction.options.getUser("user");
-      const role = interaction.options.getRole("role");
-      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true });
-      if (!canModerateTarget(interaction.member, targetMember)) return interaction.reply({ content: "❌ لا يمكنك إضافة رتبة لهذا العضو.", ephemeral: true });
-
-      await targetMember.roles.add(role);
-      return interaction.reply({ content: `✅ تم إعطاء الرول **${role.name}** لـ ${targetUser.tag}` });
-    }
-
-    // 8. /removerole
-    if (commandName === "removerole") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.ROLES_MANAGEMENT)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const targetUser = interaction.options.getUser("user");
-      const role = interaction.options.getRole("role");
-      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true });
-      if (!canModerateTarget(interaction.member, targetMember)) return interaction.reply({ content: "❌ لا يمكنك إزالة رتبة من هذا العضو.", ephemeral: true });
-
-      await targetMember.roles.remove(role);
-      return interaction.reply({ content: `✅ تم إزالة الرول **${role.name}** من ${targetUser.tag}` });
-    }
-
-    // 9. /lock
-    if (commandName === "lock") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.CHANNEL_MANAGEMENT)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const channel = interaction.options.getChannel("channel") || interaction.channel;
-      await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false });
-      return interaction.reply({ content: `🔒 تم إغلاق الروم ${channel}` });
-    }
-
-    // 10. /unlock
-    if (commandName === "unlock") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.CHANNEL_MANAGEMENT)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const channel = interaction.options.getChannel("channel") || interaction.channel;
-      await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: true });
-      return interaction.reply({ content: `🔓 تم فتح الروم ${channel}` });
-    }
-
-    // 11. /warn
-    if (commandName === "warn") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.WARNS)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const targetUser = interaction.options.getUser("user");
-      const reason = interaction.options.getString("reason");
-      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-      if (targetMember && !canModerateTarget(interaction.member, targetMember)) {
-        return interaction.reply({ content: "❌ لا يمكنك تحذير هذا العضو.", ephemeral: true });
-      }
-
-      const warnCode = generateCode();
-      if (!warnings[targetUser.id]) warnings[targetUser.id] = [];
-
-      warnings[targetUser.id].push({ code: warnCode, reason, date: new Date().toLocaleDateString() });
-      saveData("./warnings.json", warnings);
-
-      const embed = new EmbedBuilder()
-        .setTitle("⚠️ تحذير جديد")
-        .addFields(
-          { name: "العضو", value: `${targetUser.tag}`, inline: true },
-          { name: "كود التحذير", value: `\`${warnCode}\``, inline: true },
-          { name: "السبب", value: reason }
-        )
-        .setColor("Red");
-
-      return interaction.reply({ embeds: [embed] });
-    }
-
-    // 12. /unwarn
-    if (commandName === "unwarn") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.WARNS)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const code = interaction.options.getString("code");
-      let found = false;
-
-      for (const userId in warnings) {
-        const idx = warnings[userId].findIndex((w) => w.code === code);
-        if (idx !== -1) {
-          warnings[userId].splice(idx, 1);
-          saveData("./warnings.json", warnings);
-          found = true;
-          break;
-        }
-      }
-
-      return interaction.reply({ content: found ? `✅ تم إزالة التحذير صاحب الكود \`${code}\`` : "❌ الكود غير صحيح." });
-    }
-
-    // 13. /warnings
-    if (commandName === "warnings") {
-      const targetUser = interaction.options.getUser("user");
-      const embed = new EmbedBuilder().setTitle("📋 قائمة التحذيرات").setColor("Yellow");
-
-      if (targetUser) {
-        const userWarns = warnings[targetUser.id] || [];
-        embed.setDescription(
-          userWarns.map((w) => `• **الكود:** \`${w.code}\` | **السبب:** ${w.reason}`).join("\n") || "لا يوجد تحذيرات لهذا العضو."
-        );
-      } else {
-        let list = "";
-        for (const id in warnings) {
-          if (warnings[id].length > 0) {
-            list += `<@${id}>:\n` + warnings[id].map((w) => `└ الكود: \`${w.code}\` - ${w.reason}`).join("\n") + "\n";
-          }
-        }
-        embed.setDescription(list || "لا يوجد تحذيرات مسجلة بالسيرفر.");
-      }
-
-      return interaction.reply({ embeds: [embed] });
-    }
-
-    // 14. /temprole
-    if (commandName === "temprole") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.ROLES_MANAGEMENT)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const targetUser = interaction.options.getUser("user");
-      const role = interaction.options.getRole("role");
-      const durationStr = interaction.options.getString("duration");
-      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true });
-      if (!canModerateTarget(interaction.member, targetMember)) return interaction.reply({ content: "❌ لا يمكنك إعطاء رول لهذا العضو.", ephemeral: true });
-
-      const durationMs = ms(durationStr);
-      if (!durationMs) return interaction.reply({ content: "❌ صيغة المدة غير صحيحة.", ephemeral: true });
-
-      await targetMember.roles.add(role);
-
-      tempRoles.push({
-        userId: targetUser.id,
-        roleId: role.id,
-        guildId: interaction.guild.id,
-        expireAt: Date.now() + durationMs,
-      });
-
-      saveData("./tempRoles.json", tempRoles);
-      return interaction.reply({ content: `✅ تم إعطاء ${targetUser.tag} الرول **${role.name}** لمدة ${durationStr}.` });
-    }
-
-    // 15. /nickname
-    if (commandName === "nickname") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.NICKNAME)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const targetUser = interaction.options.getUser("user");
-      const nick = interaction.options.getString("nick");
-      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
-
-      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true });
-      if (!canModerateTarget(interaction.member, targetMember)) return interaction.reply({ content: "❌ لا يمكنك تغيير لقب هذا العضو.", ephemeral: true });
-
-      await targetMember.setNickname(nick);
-      return interaction.reply({ content: `✅ تم تغيير لقب ${targetUser.tag} إلى **${nick}**.` });
-    }
-
-    // 16. /leaderboard
     if (commandName === "leaderboard") {
-      const sorted = Object.entries(userMsgCount)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10);
-
-      const embed = new EmbedBuilder()
-        .setTitle("🏆 قائمة أعلى 10 متفاعلين بالسيرفر")
-        .setDescription(
-          sorted.map(([id, count], idx) => `**#${idx + 1}** <@${id}> - \`${count}\` رسالة`).join("\n") || "لا توجد بيانات بعد."
-        )
-        .setColor("Gold");
-
+      const sorted = Object.entries(userMsgCount).sort(([, a], [, b]) => b - a).slice(0, 10);
+      const embed = new EmbedBuilder().setTitle("🏆 قائمة أفضل 10 متفاعلين في السيرفر").setColor("Gold");
+      let desc = "";
+      sorted.forEach(([id, count], idx) => { desc += `**#${idx + 1}** | <@${id}> — **${count}** رسالة\n`; });
+      embed.setDescription(desc || "لا يوجد تفاعل مسجل.");
       return interaction.reply({ embeds: [embed] });
     }
 
-    // 17. /apply
-    if (commandName === "apply") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.APPLY)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const action = interaction.options.getString("action");
+    if (commandName === "jail") {
+      if (!hasPermission(interaction.member, CONFIG.ROLES.JAIL)) return interaction.reply({ content: "❌ لا تملك صلاحية.", ephemeral: true });
       const targetUser = interaction.options.getUser("user");
-      const details = interaction.options.getString("details") || "";
-
-      if (action === "open") {
-        applyStatus = true;
-        return interaction.reply({ content: "✅ تم فتح باب التقديم للإدارة." });
-      } else if (action === "close") {
-        applyStatus = false;
-        return interaction.reply({ content: "🚫 تم إغلاق باب التقديم للإدارة." });
-      } else if (action === "send") {
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("apply_btn").setLabel("تقديم على الإدارة").setStyle(ButtonStyle.Primary)
-        );
-        await interaction.channel.send({ content: "اضغط على الزر للتقديم:", components: [row] });
-        return interaction.reply({ content: "✅ تم إرسال زر التقديم بنجاح.", ephemeral: true });
-      } else if (action === "accept" || action === "reject") {
-        if (!targetUser) return interaction.reply({ content: "❌ يجب تحديد العضو المتقدم عند القبول أو الرفض.", ephemeral: true });
-
-        const isAccept = action === "accept";
-        const embed = new EmbedBuilder()
-          .setTitle(isAccept ? "✅ تم قبول متقدم جديد على الإدارة!" : "❌ تم رفض متقدم")
-          .setDescription(`العضو: ${targetUser}`)
-          .setColor(isAccept ? "Green" : "Red")
-          .setTimestamp();
-
-        if (details) embed.addFields({ name: isAccept ? "الرتبة الممنوحة" : "سبب الرفض", value: details });
-
-        await interaction.channel.send({ embeds: [embed] });
-        await targetUser.send({ embeds: [embed] }).catch(() => null);
-        return interaction.reply({ content: `✅ تم ${isAccept ? "قبول" : "رفض"} المتقدم بنجاح.`, ephemeral: true });
-      }
-    }
-
-    // 18. /giveaway
-    if (commandName === "giveaway") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.GIVEAWAY)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const durationStr = interaction.options.getString("duration");
-      const prize = interaction.options.getString("prize");
-      const durationMs = ms(durationStr);
-
-      if (!durationMs) return interaction.reply({ content: "❌ صيغة الوقت غير صحيحة (مثال: 1h, 1d).", ephemeral: true });
-
-      const embed = new EmbedBuilder()
-        .setTitle("🎉 سحب جديد (Giveaway)")
-        .setDescription(`الجائزة: **${prize}**\nالوقت: ${durationStr}`)
-        .setColor("Purple");
-
-      await interaction.reply({ content: "🎉 تم بدء السحب بنجاح!", ephemeral: true });
-
-      const msg = await interaction.channel.send({ embeds: [embed] });
-      await msg.react("🎉");
-
-      setTimeout(async () => {
-        const fetchedMsg = await interaction.channel.messages.fetch(msg.id).catch(() => null);
-        if (!fetchedMsg) return;
-
-        const reaction = fetchedMsg.reactions.cache.get("🎉");
-        const users = await reaction?.users.fetch();
-        const winner = users?.filter((u) => !u.bot).random();
-
-        await interaction.channel.send(
-          winner ? `🎉 مبروك الفائز بالجائزة **${prize}**: ${winner}!` : "❌ لم يشارك أحد بالسحب."
-        );
-      }, durationMs);
-    }
-
-    // 19. /clear
-    if (commandName === "clear") {
-      if (!hasPermission(interaction.member, CONFIG.ROLES.CHANNEL_MANAGEMENT)) {
-        return interaction.reply({ content: "❌ ليس لديك الصلاحيات لاستخدام هذا الأمر.", ephemeral: true });
-      }
-
-      const amount = interaction.options.getInteger("amount");
-      await interaction.deferReply({ ephemeral: true });
-
-      const deleted = await interaction.channel.bulkDelete(amount, true).catch(() => null);
-
-      if (!deleted) {
-        return interaction.editReply({ content: "❌ حدث خطأ، قد تكون الرسائل قديمة جداً (أكثر من 14 يوم)." });
-      }
-
-      return interaction.editReply({ content: `🧹 تم مسح **${deleted.size}** رسالة بنجاح.` });
-    }
-
-    // 20. /userinfo
-    if (commandName === "userinfo") {
-      const targetUser = interaction.options.getUser("user") || interaction.user;
+      const reason = interaction.options.getString("reason") || "بدون سبب";
       const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
 
-      const embed = new EmbedBuilder()
-        .setTitle(`👤 معلومات عضو في السيرفر`)
-        .setThumbnail(targetUser.displayAvatarURL())
-        .addFields(
-          { name: "الاسم", value: `${targetUser.tag}`, inline: true },
-          { name: "المعرف (ID)", value: `${targetUser.id}`, inline: true },
-          { name: "تاريخ الانضمام للديسكورد", value: `<t:${Math.floor(targetUser.createdTimestamp / 1000)}:R>`, inline: false }
-        )
-        .setColor("Gold");
+      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true });
 
-      if (targetMember) {
-        embed.addFields({ name: "تاريخ الانضمام للسيرفر", value: `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:R>`, inline: false });
-      }
+      jailedUsers[targetUser.id] = targetMember.roles.cache.filter((r) => r.id !== interaction.guild.id).map((r) => r.id);
+      saveData("./jailedUsers.json", jailedUsers);
 
-      return interaction.reply({ embeds: [embed] });
-    }
-  }
-
-  // التقديم للإدارة (زر)
-  if (interaction.isButton() && interaction.customId === "apply_btn") {
-    if (!applyStatus) {
-      return interaction.reply({ content: "🚫 التقديم مغلق حالياً.", ephemeral: true });
+      await targetMember.roles.set([CONFIG.JAIL_ROLE_ID]).catch(() => null);
+      return interaction.reply({ content: `🔒 تم سجن العضو ${targetUser.tag} | السبب: ${reason}` });
     }
 
-    const modal = new ModalBuilder().setCustomId("apply_modal").setTitle("تقديم على الإدارة");
+    if (commandName === "unjail") {
+      if (!hasPermission(interaction.member, CONFIG.ROLES.JAIL)) return interaction.reply({ content: "❌ لا تملك صلاحية.", ephemeral: true });
+      const targetUser = interaction.options.getUser("user");
+      const targetMember = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
 
-    const rows = CONFIG.APPLY_QUESTIONS.map((q) => {
-      const input = new TextInputBuilder()
-        .setCustomId(q.id)
-        .setLabel(q.label)
-        .setPlaceholder(q.placeholder)
-        .setStyle(q.style)
-        .setRequired(q.required);
+      if (!targetMember) return interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true });
 
-      return new ActionRowBuilder().addComponents(input);
-    });
+      const oldRoles = jailedUsers[targetUser.id] || [];
+      await targetMember.roles.set(oldRoles).catch(() => null);
+      delete jailedUsers[targetUser.id];
+      saveData("./jailedUsers.json", jailedUsers);
 
-    modal.addComponents(rows);
-    await interaction.showModal(modal);
-  }
-
-  // استلام بيانات التقديم
-  if (interaction.isModalSubmit() && interaction.customId === "apply_modal") {
-    await interaction.reply({ content: "✅ تم إرسال تقديمك بنجاح!", ephemeral: true });
-
-    const answers = CONFIG.APPLY_QUESTIONS.map((q) => {
-      return { label: q.label, value: interaction.fields.getTextInputValue(q.id) };
-    });
-
-    const embed = new EmbedBuilder()
-      .setTitle("📥 تقديم إدارة جديد")
-      .setDescription(`المتقدم: ${interaction.user} (ID: \`${interaction.user.id}\`)`)
-      .addFields(answers.map((a) => ({ name: a.label, value: a.value })))
-      .setColor("Blue")
-      .setTimestamp();
-
-    await interaction.channel.send({ embeds: [embed] });
+      return interaction.reply({ content: `🔓 تم فك سجن العضو ${targetUser.tag}.` });
+    }
   }
 });
 
