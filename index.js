@@ -17,13 +17,9 @@ const {
   GatewayIntentBits,
   Partials,
   EmbedBuilder,
-  ChannelType,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   PermissionFlagsBits,
 } = require("discord.js");
 
@@ -64,7 +60,7 @@ const CONFIG = {
   WELCOME_IMAGE_URL:
     "https://cdn.discordapp.com/attachments/1442200304522104929/1534267076380721355/welcome.png",
 
-  JAIL_ROLE_ID: "1513691033815220334", // ID رول المسجون
+  JAIL_ROLE_ID: "1508130937819500635", // ID رول المسجون
 
   ROLES: {
     BAN: [
@@ -302,7 +298,6 @@ function checkTempBans() {
   }, 30000);
 }
 
-// إنهاء القيف أواي وإعلان الفائزين
 async function endGiveaway(messageId) {
   const gw = giveaways[messageId];
   if (!gw || gw.ended) return;
@@ -418,7 +413,7 @@ client.on("guildMemberAdd", async (member) => {
 });
 
 // ============================================================
-// أزرار القيف أواي (Interaction Create)
+// أزرار القيف أواي
 // ============================================================
 
 client.on("interactionCreate", async (interaction) => {
@@ -458,7 +453,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ============================================================
-// MESSAGE CREATE (الأوامر بدون بادئة)
+// MESSAGE CREATE
 // ============================================================
 
 client.on("messageCreate", async (message) => {
@@ -629,7 +624,7 @@ client.on("messageCreate", async (message) => {
     return message.reply(`⚠️ تم تحذير ${target.user.tag} | الكود: \`${warnCode}\` | السبب: ${reason}`);
   }
 
-  // 12. أمر ازالة تحذير
+  // 12. أمر اعفاء
   if (command === "اعفاء" || command === "عفو") {
     if (!hasPermission(message.member, CONFIG.ROLES.WARNS)) return message.reply("❌ ليس لديك صلاحية.");
     const query = args[0];
@@ -654,7 +649,7 @@ client.on("messageCreate", async (message) => {
     return message.reply("❌ لم يتم العثور على تحذيرات لهذا العضو أو الكود.");
   }
 
-  // 13. أمر التحذيرات
+  // 13. أمر تحذيرات
   if (command === "تحذيرات" || command === "التحذيرات") {
     const target = message.mentions.users.first() || (args[0] ? await client.users.fetch(args[0]).catch(() => null) : null);
     const embed = new EmbedBuilder().setTitle("📋 قائمة التحذيرات").setColor("Orange");
@@ -691,7 +686,7 @@ client.on("messageCreate", async (message) => {
     return message.reply(`✅ تم إعطاء ${target.user.tag} الرول **${role.name}** لمدة ${args[1]}`);
   }
 
-  // 15. أمر اسم مستعار
+  // 15. أمر لقب
   if (command === "لقب" || command === "اسم") {
     if (!hasPermission(message.member, CONFIG.ROLES.NICKNAME)) return message.reply("❌ ليس لديك صلاحية.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
@@ -702,7 +697,7 @@ client.on("messageCreate", async (message) => {
     return message.reply(`✅ تم تغيير الاسم المستعار لـ ${target.user.tag} إلى **${newNick}**`);
   }
 
-  // 16. لوحة الصدارة
+  // 16. أمر تفاعل
   if (command === "تفاعل" || command === "المتفاعلين" || command === "التفاعل") {
     const sorted = Object.entries(userMsgCount)
       .sort(([, a], [, b]) => b - a)
@@ -723,35 +718,36 @@ client.on("messageCreate", async (message) => {
     return message.reply({ embeds: [embed] });
   }
 
-  // 17. أمر سجن (المعدل)
+  // 17. أمر سجن (المصحح والمطور)
   if (command === "سجن") {
     if (!hasPermission(message.member, CONFIG.ROLES.JAIL)) return message.reply("❌ ليس لديك صلاحية.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
     if (!target) return message.reply("❌ طريقة الاستخدام: `سجن [يوزر/معرف العضو] [السبب]`");
 
+    if (!canModerateTarget(message.member, target)) return message.reply("❌ لا يمكنك سجن هذا العضو.");
+
     const reason = args.slice(1).join(" ") || "بدون سبب";
     
-    // حفظ رتب العضو القابلة للإزالة (تتخطى رتبة everyone والأدوار المدارة آلياً كالبوتات)
+    // تصفية وحفظ رتب العضو التي يستطيع البوت إدارتها
     const assignableRoles = target.roles.cache.filter((r) => r.id !== message.guild.id && !r.managed);
-    const userRoles = assignableRoles.map((r) => r.id);
+    const userRoleIds = assignableRoles.map((r) => r.id);
 
-    jailedUsers[target.id] = userRoles;
+    jailedUsers[target.id] = userRoleIds;
     saveData("./jailedUsers.json", jailedUsers);
 
     try {
-      // سحب كافة الأدوار ثم إضافة رول السجن
-      if (assignableRoles.size > 0) {
-        await target.roles.remove(assignableRoles).catch(() => null);
+      if (userRoleIds.length > 0) {
+        await target.roles.remove(userRoleIds).catch((e) => console.error("❌ فشل سحب بعض الرتب:", e.message));
       }
-      await target.roles.add(CONFIG.JAIL_ROLE_ID).catch((e) => console.error("❌ خطأ إضافة رول السجن:", e));
+      await target.roles.add(CONFIG.JAIL_ROLE_ID);
+      return message.reply(`🔒 تم سجن العضو ${target.user.tag} بنجاح | السبب: ${reason}`);
     } catch (err) {
-      console.error("❌ خطأ أثناء تطبيق السجن:", err);
+      console.error("❌ خطأ أثناء السجن:", err);
+      return message.reply("⚠️ حدث خطأ أثناء تنفيذ السجن. يرجى التأكد من أن رتبة البوت أعلى من رتبة العضو المراد سجنه.");
     }
-
-    return message.reply(`🔒 تم سجن العضو ${target.user.tag} | السبب: ${reason}`);
   }
 
-  // 18. أمر افراج (المعدل)
+  // 18. أمر إفراج (المصحح والمطور)
   if (command === "افراج" || rawContent.startsWith("فك سجن") || command === "فك_سجن") {
     if (!hasPermission(message.member, CONFIG.ROLES.JAIL)) return message.reply("❌ ليس لديك صلاحية.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
@@ -760,19 +756,23 @@ client.on("messageCreate", async (message) => {
     const oldRoles = jailedUsers[target.id] || [];
 
     try {
-      // إزالة رول السجن وإعادة الرتب القديمة
+      // 1. إزالة رول السجن أولاً
       await target.roles.remove(CONFIG.JAIL_ROLE_ID).catch(() => null);
+
+      // 2. إرجاع الرتب المخبأة
       if (oldRoles.length > 0) {
-        await target.roles.add(oldRoles).catch(() => null);
+        await target.roles.add(oldRoles).catch((e) => console.error("❌ فشل إرجاع بعض الرتب عند الإفراج:", e.message));
       }
+
+      // 3. مسح البيانات المنسوبة للعضو
+      delete jailedUsers[target.id];
+      saveData("./jailedUsers.json", jailedUsers);
+
+      return message.reply(`🔓 تم الإفراج عن ${target.user.tag} وإعادة (${oldRoles.length}) رول له بنجاح.`);
     } catch (err) {
       console.error("❌ خطأ أثناء الإفراج:", err);
+      return message.reply("❌ حدث خطأ أثناء فك السجن، يرجى التأكد من صلاحية البوت ورتبته بالسيرفر.");
     }
-
-    delete jailedUsers[target.id];
-    saveData("./jailedUsers.json", jailedUsers);
-
-    return message.reply(`🔓 تم الإفراج عن العضو ${target.user.tag} وإعادة رتبه الأصليّة.`);
   }
 
   // 19. أمر قيفاواي
