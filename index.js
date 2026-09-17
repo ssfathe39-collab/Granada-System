@@ -333,11 +333,16 @@ async function endGiveaway(messageId) {
 
   await msg.edit({ embeds: [endEmbed], components: [disabledRow] }).catch(() => null);
 
-  if (winners.length > 0) {
-    channel.send(`🎉 مبارك ${winnerText}! لقد فزتم بـ **${gw.prize}**!`).catch(() => null);
-  } else {
-    channel.send(`⚠️ انتهى القيف أواي على **${gw.prize}** ولكن لم يشارك أحد.`).catch(() => null);
-  }
+  const winnerAnnounceEmbed = new EmbedBuilder()
+    .setTitle("🎊 نتيجة القيف أواي 🎊")
+    .setColor("Gold")
+    .setDescription(
+      winners.length > 0
+        ? `🎉 ألف مبروك للربح معنا!\n\n👑 **الفائزون:** ${winnerText}\n🎁 **الجائزة:** ${gw.prize}`
+        : `⚠️ انتهى القيف أواي على **${gw.prize}** ولكن لم يشارك أحد.`
+    );
+
+  channel.send({ embeds: [winnerAnnounceEmbed] }).catch(() => null);
 }
 
 function checkGiveaways() {
@@ -368,7 +373,6 @@ function canModerateTarget(executor, target) {
   if (executor.id === executor.guild.ownerId) return true;
   if (target.id === executor.id) return false;
   
-  // التحقق من أن رتبة المنفذ أعلى من رتبة العضو المطلوب معاقبته
   return executor.roles.highest.position > target.roles.highest.position;
 }
 
@@ -446,7 +450,6 @@ client.on("guildMemberAdd", async (member) => {
 // ============================================================
 
 client.on("interactionCreate", async (interaction) => {
-  // 1. التعامل مع الأزرار
   if (interaction.isButton()) {
     if (interaction.customId === "join_giveaway") {
       const gw = giveaways[interaction.message.id];
@@ -481,7 +484,6 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // 2. التعامل مع أوامر السلاش (Slash Commands)
   if (interaction.isChatInputCommand()) {
     await interaction.deferReply({ flags: 64 }).catch(() => null);
 
@@ -667,7 +669,7 @@ client.on("messageCreate", async (message) => {
     return message.reply(`🔒 تم إغلاق الروم ${channel}`);
   }
 
-  // 11. أمر تحذير
+  // 11. أمر تحذير (معدل بـ Embed)
   if (command === "تحذير" || command === "انذار") {
     if (!hasPermission(message.member, CONFIG.ROLES.WARNS)) return message.reply("❌ ليس لديك صلاحية.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
@@ -680,7 +682,19 @@ client.on("messageCreate", async (message) => {
     warnings[target.id].push({ code: warnCode, reason, date: new Date().toLocaleDateString() });
     saveData("./warnings.json", warnings);
 
-    return message.reply(`⚠️ تم تحذير ${target.user.tag} | الكود: \`${warnCode}\` | السبب: ${reason}`);
+    const warnEmbed = new EmbedBuilder()
+      .setTitle("⚠️ إشـعـار تـحـذيـر جديد")
+      .setColor("DarkRed")
+      .setThumbnail(target.user.displayAvatarURL({ dynamic: true }))
+      .addFields(
+        { name: "👤 العضو المحذر", value: `${target} (${target.user.tag})`, inline: true },
+        { name: "🛡️ الإداري المنفذ", value: `${message.author}`, inline: true },
+        { name: "🔑 كود التحذير", value: `\`${warnCode}\``, inline: true },
+        { name: "📝 السبب", value: reason, inline: false }
+      )
+      .setTimestamp();
+
+    return message.reply({ embeds: [warnEmbed] });
   }
 
   // 12. أمر اعفاء
@@ -784,7 +798,7 @@ client.on("messageCreate", async (message) => {
     return message.reply({ embeds: [embed] });
   }
 
-  // 17. أمر سجن
+  // 17. أمر سجن (معدل بـ Embed)
   if (command === "سجن") {
     if (!hasPermission(message.member, CONFIG.ROLES.JAIL)) return message.reply("❌ ليس لديك صلاحية.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
@@ -805,14 +819,26 @@ client.on("messageCreate", async (message) => {
         await target.roles.remove(userRoleIds).catch((e) => console.error("❌ فشل سحب بعض الرتب:", e.message));
       }
       await target.roles.add(CONFIG.JAIL_ROLE_ID);
-      return message.reply(`🔒 تم سجن العضو ${target.user.tag} بنجاح | السبب: ${reason}`);
+
+      const jailEmbed = new EmbedBuilder()
+        .setTitle("🔒 قرار سـجـن إداري")
+        .setColor("DarkGrey")
+        .setThumbnail(target.user.displayAvatarURL({ dynamic: true }))
+        .addFields(
+          { name: "👤 المسجون", value: `${target} (${target.user.tag})`, inline: true },
+          { name: "🛡️ الإداري المنفذ", value: `${message.author}`, inline: true },
+          { name: "📝 السبب", value: reason, inline: false }
+        )
+        .setTimestamp();
+
+      return message.reply({ embeds: [jailEmbed] });
     } catch (err) {
       console.error("❌ خطأ أثناء السجن:", err);
       return message.reply("⚠️ حدث خطأ أثناء تنفيذ السجن. يرجى التأكد من أن رتبة البوت أعلى من رتبة العضو المراد سجنه.");
     }
   }
 
-  // 18. أمر إفراج
+  // 18. أمر إفراج (معدل بـ Embed)
   if (command === "افراج" || rawContent.startsWith("فك سجن") || command === "فك_سجن") {
     if (!hasPermission(message.member, CONFIG.ROLES.JAIL)) return message.reply("❌ ليس لديك صلاحية.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
@@ -831,14 +857,25 @@ client.on("messageCreate", async (message) => {
       delete jailedUsers[target.id];
       saveData("./jailedUsers.json", jailedUsers);
 
-      return message.reply(`🔓 تم الإفراج عن ${target.user.tag} وإعادة (${oldRoles.length}) رول له بنجاح.`);
+      const unjailEmbed = new EmbedBuilder()
+        .setTitle("🔓 قرار إفــراج")
+        .setColor("Green")
+        .setThumbnail(target.user.displayAvatarURL({ dynamic: true }))
+        .addFields(
+          { name: "👤 المفرج عنه", value: `${target} (${target.user.tag})`, inline: true },
+          { name: "🛡️ الإداري المنفذ", value: `${message.author}`, inline: true },
+          { name: "🔄 الرتب المستعادة", value: `${oldRoles.length} رتبة`, inline: false }
+        )
+        .setTimestamp();
+
+      return message.reply({ embeds: [unjailEmbed] });
     } catch (err) {
       console.error("❌ خطأ أثناء الإفراج:", err);
       return message.reply("❌ حدث خطأ أثناء فك السجن، يرجى التأكد من صلاحية البوت ورتبته بالسيرفر.");
     }
   }
 
-  // 19. أمر قيفاواي
+  // 19. أمر قيفاواي (معدل بـ Embeds)
   if (command === "قيفاواي" || command === "سحب") {
     if (!hasPermission(message.member, CONFIG.ROLES.GIVEAWAY)) return message.reply("❌ ليس لديك صلاحية لاستخدام أمر السحب.");
 
