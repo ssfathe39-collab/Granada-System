@@ -726,25 +726,52 @@ client.on("messageCreate", async (message) => {
     return message.reply("❌ لم يتم العثور على تحذيرات لهذا العضو أو الكود.");
   }
 
-  // 13. أمر تحذيرات
+  // 13. أمر تحذيرات (معدل بالكامل كـ Embed)
   if (command === "تحذيرات" || command === "التحذيرات") {
     const target = message.mentions.users.first() || (args[0] ? await client.users.fetch(args[0]).catch(() => null) : null);
-    const embed = new EmbedBuilder().setTitle("📋 قائمة التحذيرات").setColor("Orange");
-
+    
     if (target) {
       const list = warnings[target.id] || [];
-      if (!list.length) return message.reply("✅ لا يوجد تحذيرات مسجلة لهذا العضو.");
-      embed.setDescription(list.map((w) => `• الكود: \`${w.code}\` | السبب: ${w.reason} | التاريخ: ${w.date}`).join("\n"));
+      const embed = new EmbedBuilder()
+        .setTitle(`📋 سجل تحذيرات العضو`)
+        .setColor(list.length > 0 ? "Orange" : "Green")
+        .setThumbnail(target.displayAvatarURL({ dynamic: true }))
+        .addFields({ name: "👤 العضو", value: `${target} (${target.tag})`, inline: false });
+
+      if (list.length === 0) {
+        embed.setDescription("✨ **لا توجد أي تحذيرات مسجلة لهذا العضو.**");
+      } else {
+        let desc = list.map((w, i) => `**#${i + 1}**\n🔑 **الكود:** \`${w.code}\` \n📝 **السبب:** ${w.reason}\n📅 **التاريخ:** \`${w.date}\``).join("\n\n");
+        embed.setDescription(desc);
+        embed.setFooter({ text: `إجمالي التحذيرات: ${list.length}` });
+      }
+      return message.reply({ embeds: [embed] });
+
     } else {
-      let total = "";
+      const embed = new EmbedBuilder()
+        .setTitle("📋 سجل تحذيرات سيرفر غرناطة")
+        .setColor("DarkOrange")
+        .setTimestamp();
+
+      let totalWarnsCount = 0;
+      let desc = "";
+
       for (const uid in warnings) {
-        if (warnings[uid].length > 0) {
-          total += `<@${uid}>: ${warnings[uid].length} تحذير(ات)\n`;
+        if (warnings[uid] && warnings[uid].length > 0) {
+          totalWarnsCount += warnings[uid].length;
+          desc += `• <@${uid}> ➔ **${warnings[uid].length}** تحذير(ات)\n`;
         }
       }
-      embed.setDescription(total || "لا توجد تحذيرات مسجلة في السيرفر.");
+
+      if (!desc) {
+        embed.setDescription("✨ **لا توجد أي تحذيرات مسجلة في السيرفر حالياً.**");
+      } else {
+        embed.setDescription(desc);
+        embed.setFooter({ text: `مجموع تحذيرات السيرفر: ${totalWarnsCount}` });
+      }
+
+      return message.reply({ embeds: [embed] });
     }
-    return message.reply({ embeds: [embed] });
   }
 
   // 14. أمر رول مؤقت
