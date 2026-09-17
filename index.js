@@ -726,47 +726,50 @@ client.on("messageCreate", async (message) => {
     return message.reply("❌ لم يتم العثور على تحذيرات لهذا العضو أو الكود.");
   }
 
-  // 13. أمر تحذيرات (معدل بالكامل كـ Embed)
+  // 13. أمر تحذيرات (معدل بالتنسيق المطلوب)
   if (command === "تحذيرات" || command === "التحذيرات") {
     const target = message.mentions.users.first() || (args[0] ? await client.users.fetch(args[0]).catch(() => null) : null);
     
+    // عرض تحذيرات عضو معين
     if (target) {
       const list = warnings[target.id] || [];
       const embed = new EmbedBuilder()
         .setTitle(`📋 سجل تحذيرات العضو`)
         .setColor(list.length > 0 ? "Orange" : "Green")
-        .setThumbnail(target.displayAvatarURL({ dynamic: true }))
-        .addFields({ name: "👤 العضو", value: `${target} (${target.tag})`, inline: false });
+        .setThumbnail(target.displayAvatarURL({ dynamic: true }));
 
       if (list.length === 0) {
         embed.setDescription("✨ **لا توجد أي تحذيرات مسجلة لهذا العضو.**");
       } else {
-        let desc = list.map((w, i) => `**#${i + 1}**\n🔑 **الكود:** \`${w.code}\` \n📝 **السبب:** ${w.reason}\n📅 **التاريخ:** \`${w.date}\``).join("\n\n");
+        let desc = list.map((w) => `<@${target.id}> السبب : ${w.reason} كود التحذير ${w.code}`).join("\n\n");
         embed.setDescription(desc);
         embed.setFooter({ text: `إجمالي التحذيرات: ${list.length}` });
       }
       return message.reply({ embeds: [embed] });
 
+    // عرض تحذيرات السيرفر بالكامل
     } else {
       const embed = new EmbedBuilder()
-        .setTitle("📋 سجل تحذيرات سيرفر غرناطة")
+        .setTitle("📋 سجل تحذيرات السيرفر")
         .setColor("DarkOrange")
         .setTimestamp();
 
       let totalWarnsCount = 0;
-      let desc = "";
+      let warnList = [];
 
       for (const uid in warnings) {
         if (warnings[uid] && warnings[uid].length > 0) {
-          totalWarnsCount += warnings[uid].length;
-          desc += `• <@${uid}> ➔ **${warnings[uid].length}** تحذير(ات)\n`;
+          warnings[uid].forEach((w) => {
+            totalWarnsCount++;
+            warnList.push(`<@${uid}> السبب : ${w.reason} كود التحذير ${w.code}`);
+          });
         }
       }
 
-      if (!desc) {
+      if (warnList.length === 0) {
         embed.setDescription("✨ **لا توجد أي تحذيرات مسجلة في السيرفر حالياً.**");
       } else {
-        embed.setDescription(desc);
+        embed.setDescription(warnList.join("\n\n"));
         embed.setFooter({ text: `مجموع تحذيرات السيرفر: ${totalWarnsCount}` });
       }
 
@@ -825,7 +828,7 @@ client.on("messageCreate", async (message) => {
     return message.reply({ embeds: [embed] });
   }
 
-  // 17. أمر سجن (معدل بـ Embed)
+  // 17. أمر سجن
   if (command === "سجن") {
     if (!hasPermission(message.member, CONFIG.ROLES.JAIL)) return message.reply("❌ ليس لديك صلاحية.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
@@ -865,7 +868,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // 18. أمر إفراج (معدل بـ Embed)
+  // 18. أمر إفراج
   if (command === "افراج" || rawContent.startsWith("فك سجن") || command === "فك_سجن") {
     if (!hasPermission(message.member, CONFIG.ROLES.JAIL)) return message.reply("❌ ليس لديك صلاحية.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
@@ -902,7 +905,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // 19. أمر قيفاواي (معدل بـ Embeds)
+  // 19. أمر قيفاواي
   if (command === "قيفاواي" || command === "سحب") {
     if (!hasPermission(message.member, CONFIG.ROLES.GIVEAWAY)) return message.reply("❌ ليس لديك صلاحية لاستخدام أمر السحب.");
 
