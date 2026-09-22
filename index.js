@@ -592,7 +592,7 @@ client.on("messageCreate", async (message) => {
   }
 
   // 4. أمر تايم اوت
-  if (command === "تايم_اوت" || command === "تايم-اوت" || command === "اسكات") {
+  if (command === "تايم" || command === "اسكات") {
     if (!hasPermission(message.member, CONFIG.ROLES.TIMEOUT)) return message.reply("❌ ليس لديك صلاحية لاستخدام هذا الأمر.");
     const target = message.mentions.members.first() || await message.guild.members.fetch(args[0]).catch(() => null);
     if (!target) return message.reply("❌ يرجى منشن أو معرف العضو.");
